@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
@@ -8,68 +9,36 @@ import yaml
 
 configurable_parameters = [
     {"name": "device", "default": "192.168.1.10", "description": "Device IPv4 address"},
-    {"name": "camera", "default": "camera", "description": "'camera' should uniquely identify the device. All topics are pushed down into the 'camera' namespace."},
-    {"name": "camera_link_frame_id", "default": "camera_link", "description": "Camera link frame identifier"},
+    {"name": "camera", "default": "camera", "description": "Unique namespace for the camera"},
+    {"name": "camera_link_frame_id", "default": "wrist_camera_link", "description": "Camera link frame identifier"},
     {"name": "color_frame_id", "default": "camera_color_frame", "description": "Color camera frame identifier"},
     {"name": "depth_frame_id", "default": "camera_depth_frame", "description": "Depth camera frame identifier"},
-    {"name": "color_camera_info_url", "default": "", "description": "URL of custom calibration file for color camera. See camera_info_manager docs for calibration URL details"},
-    {"name": "depth_camera_info_url", "default": "", "description": "URL of custom calibration file for depth camera. See camera_info_manager docs for calibration URL details"},
-    {"name": "depth_rtsp_element_config", "default": "depth latency=30", "description": "RTSP element configuration for depth stream"},
-    {"name": "depth_rtp_depay_element_config", "default": "rtpgstdepay", "description": "RTP element configuration for depth stream"},
-    {"name": "color_rtsp_element_config", "default": "color latency=30", "description": "RTSP element configuration for color stream"},
-    {"name": "color_rtp_depay_element_config", "default": "rtph264depay", "description": "RTP element configuration for color stream"},
-    {"name": "launch_color", "default": "true", "description": "Launch the color image node"},
-    {"name": "launch_depth", "default": "true", "description": "Launch the depth image node"},
-    {"name": "depth_registration", "default": "true", "description": "Enable depth→RGB registration + masking pipeline"},
-    {"name": "max_color_pub_rate", "default": "30.0", "description": "Maximum image publication rate"},
-    {"name": "max_depth_pub_rate", "default": "30.0", "description": "Maximum image publication rate"},
+    {"name": "color_optical_frame_id", "default": "camera_color_optical_frame", "description": "Color optical frame"},
+    {"name": "depth_optical_frame_id", "default": "camera_depth_optical_frame", "description": "Depth optical frame"},
+    {"name": "color_camera_info_url", "default": "", "description": "Custom calibration file URL for color camera"},
+    {"name": "depth_camera_info_url", "default": "", "description": "Custom calibration file URL for depth camera"},
+    {"name": "depth_rtsp_element_config", "default": "depth latency=30", "description": "RTSP config for depth"},
+    {"name": "depth_rtp_depay_element_config", "default": "rtpgstdepay", "description": "RTP config for depth"},
+    {"name": "color_rtsp_element_config", "default": "color latency=30", "description": "RTSP config for color"},
+    {"name": "color_rtp_depay_element_config", "default": "rtph264depay", "description": "RTP config for color"},
+    {"name": "launch_color", "default": "true", "description": "Launch the color stream"},
+    {"name": "launch_depth", "default": "true", "description": "Launch the depth stream"},
+    {"name": "depth_registration", "default": "true", "description": "Enable depth→RGB registration + masking"},
+    {"name": "max_color_pub_rate", "default": "30.0", "description": "Max pub rate for color"},
+    {"name": "max_depth_pub_rate", "default": "30.0", "description": "Max pub rate for depth"},
 ]
 
 def declare_configurable_parameters():
-    return [
-        DeclareLaunchArgument(param["name"], default_value=param["default"], description=param["description"])
-        for param in configurable_parameters
-    ]
+    return [DeclareLaunchArgument(param["name"], default_value=param["default"], description=param["description"])
+            for param in configurable_parameters]
 
 def set_configurable_parameters(parameters):
     return dict([(param["name"], LaunchConfiguration(param["name"])) for param in parameters])
 
-def yaml_to_dict(path_to_yaml):
-    with open(path_to_yaml, "r") as f:
-        return yaml.load(f, Loader=yaml.SafeLoader)
-
 def launch_setup(context, *args, **kwargs):
-    # Depth Node
-    depth_node = Node(
-        package="kinova_vision",
-        namespace=LaunchConfiguration("camera"),
-        executable="kinova_vision_node",
-        name="kinova_vision_depth",
-        output="both",
-        parameters=[{
-            "camera_type": "depth",
-            "camera_name": "depth",
-            "camera_info_url_default": "package://kinova_vision/launch/calibration/default_depth_calib_%ux%u.ini",
-            "camera_info_url_user": LaunchConfiguration("depth_camera_info_url").perform(context),
-            "stream_config": "rtspsrc location=rtsp://"
-                + LaunchConfiguration("device").perform(context) + "/"
-                + LaunchConfiguration("depth_rtsp_element_config").perform(context)
-                + " ! "
-                + LaunchConfiguration("depth_rtp_depay_element_config").perform(context),
-            "frame_id": LaunchConfiguration("depth_frame_id").perform(context),
-            "max_pub_rate": LaunchConfiguration("max_depth_pub_rate"),
-        }],
-        remappings=[
-            ("camera_info", "depth/camera_info"),
-            ("image_raw", "depth/image_raw"),
-            ("image_raw/compressed", "depth/image_raw/compressed"),
-            ("image_raw/compressedDepth", "depth/image_raw/compressedDepth"),
-            ("image_raw/theora", "depth/image_raw/theora"),
-        ],
-        condition=IfCondition(LaunchConfiguration("launch_depth")),
-    )
-
+    # --------------------------------------------------------------------------
     # Color Node
+    # --------------------------------------------------------------------------
     color_node = Node(
         package="kinova_vision",
         namespace=LaunchConfiguration("camera"),
@@ -82,12 +51,13 @@ def launch_setup(context, *args, **kwargs):
             "camera_info_url_default": "package://kinova_vision/launch/calibration/default_color_calib_%ux%u.ini",
             "camera_info_url_user": LaunchConfiguration("color_camera_info_url").perform(context),
             "stream_config": "rtspsrc location=rtsp://"
-                + LaunchConfiguration("device").perform(context) + "/"
+                + LaunchConfiguration("device").perform(context)
+                + "/"
                 + LaunchConfiguration("color_rtsp_element_config").perform(context)
                 + " ! "
                 + LaunchConfiguration("color_rtp_depay_element_config").perform(context)
                 + " ! avdec_h264 ! videoconvert",
-            "frame_id": LaunchConfiguration("color_frame_id").perform(context),
+            "frame_id": LaunchConfiguration("color_optical_frame_id").perform(context),
             "max_pub_rate": LaunchConfiguration("max_color_pub_rate"),
         }],
         remappings=[
@@ -100,7 +70,42 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(LaunchConfiguration("launch_color")),
     )
 
-    # Align depth → RGB using depth_image_proc::RegisterNode (no rectification step)
+    # --------------------------------------------------------------------------
+    # Depth Node
+    # --------------------------------------------------------------------------
+    depth_node = Node(
+        package="kinova_vision",
+        namespace=LaunchConfiguration("camera"),
+        executable="kinova_vision_node",
+        name="kinova_vision_depth",
+        output="both",
+        parameters=[{
+            "camera_type": "depth",
+            "camera_name": "depth",
+            "camera_info_url_default": "package://kinova_vision/launch/calibration/default_depth_calib_%ux%u.ini",
+            "camera_info_url_user": LaunchConfiguration("depth_camera_info_url").perform(context),
+            "stream_config": "rtspsrc location=rtsp://"
+                + LaunchConfiguration("device").perform(context)
+                + "/"
+                + LaunchConfiguration("depth_rtsp_element_config").perform(context)
+                + " ! "
+                + LaunchConfiguration("depth_rtp_depay_element_config").perform(context),
+            "frame_id": LaunchConfiguration("depth_optical_frame_id").perform(context),
+            "max_pub_rate": LaunchConfiguration("max_depth_pub_rate"),
+        }],
+        remappings=[
+            ("camera_info", "depth/camera_info"),
+            ("image_raw", "depth/image_raw"),
+            ("image_raw/compressed", "depth/image_raw/compressed"),
+            ("image_raw/compressedDepth", "depth/image_raw/compressedDepth"),
+            ("image_raw/theora", "depth/image_raw/theora"),
+        ],
+        condition=IfCondition(LaunchConfiguration("launch_depth")),
+    )
+
+    # --------------------------------------------------------------------------
+    # Depth → RGB registration
+    # --------------------------------------------------------------------------
     depth_image_proc = ComposableNodeContainer(
         name="registered_depth_images",
         namespace=LaunchConfiguration("camera"),
@@ -115,36 +120,39 @@ def launch_setup(context, *args, **kwargs):
                 remappings=[
                     ("rgb/camera_info", "color/camera_info"),
                     ("depth/camera_info", "depth/camera_info"),
-                    ("depth/image_rect", "depth/image_raw"),  # use raw; your distortion is 0
-                    # output: "depth_registered/image_rect"
+                    ("depth/image_rect", "depth/image_raw"),
                 ],
                 parameters=[{
-                    "fill_upsampling_holes": True,   # upsample 480x270 → 1280x720 with fewer holes
+                    "fill_upsampling_holes": True,
                     "queue_size": 10,
                 }],
             ),
-            # (Drop PointCloudXyzrgbNode; not needed for your use case)
         ],
         output="both",
         condition=IfCondition(LaunchConfiguration("depth_registration")),
     )
 
-    # Mask RGB where registered depth is valid; publishes /color/rgb_masked
+    # --------------------------------------------------------------------------
+    # RGB masking
+    # --------------------------------------------------------------------------
     mask_rgb_with_depth = Node(
-        package="kinova_vision",                  # <-- change to your package name
-        executable="mask_rgb_with_depth.py",    # <-- ensure this script is installed/executable
+        package="kinova_vision",
+        executable="mask_rgb_with_depth.py",
         name="mask_rgb_with_depth",
         namespace=LaunchConfiguration("camera"),
-        remappings=[
-            ("color/image_rect_color", "color/image_raw"),                 # use your RGB raw
-            ("depth_registered/image_rect", "depth_registered/image_rect"),# from RegisterNode
-            ("rgb_masked/image", "color/rgb_masked"),                      # output image
-        ],
-        parameters=[{"depth_epsilon": 1e-6}],
-        condition=IfCondition(LaunchConfiguration("depth_registration")),
+        parameters=[{
+            "rgb_topic": "color/image_raw",
+            "depth_topic": "depth/image_raw",
+            "depth_info_topic": "depth/camera_info",
+            "out_image_topic": "color/rgb_masked",
+            "out_info_topic": "color/rgb_masked/camera_info",
+            "min_depth_m": 0.10,
+            "max_depth_m": 3.5,
+            "sync_queue": 10,
+            "sync_slop": 0.05
+        }],
     )
 
-    # Relay CameraInfo so masked image has corresponding camera_info
     masked_info_relay = Node(
         package="topic_tools",
         executable="relay",
@@ -154,55 +162,75 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(LaunchConfiguration("depth_registration")),
     )
 
-    # Static TFs (unchanged)
-    camera_depth_tf_publisher = Node(
-        package="tf2_ros",
-        namespace=LaunchConfiguration("camera"),
-        executable="static_transform_publisher",
-        name="camera_depth_tf_publisher",
-        output="both",
-        arguments=[
-            "-0.0195","-0.005","0","0","0","0",
-            LaunchConfiguration("camera_link_frame_id"),
-            LaunchConfiguration("depth_frame_id"),
-        ],
-        condition=IfCondition(LaunchConfiguration("launch_depth")),
-    )
-
-    camera_color_tf_publisher = Node(
-        package="tf2_ros",
-        namespace=LaunchConfiguration("camera"),
-        executable="static_transform_publisher",
-        name="camera_color_tf_publisher",
-        output="both",
-        arguments=[
-            "0","0","0","0","0","0",
-            LaunchConfiguration("camera_link_frame_id"),
-            LaunchConfiguration("color_frame_id"),
-        ],
-        condition=IfCondition(LaunchConfiguration("launch_color")),
-    )
-
-    camera_mount_tf = Node(
+    # --------------------------------------------------------------------------
+    # Static TFs (5 total)
+    # --------------------------------------------------------------------------
+    bracelet_to_camera_link = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        name="camera_mount_tf",
+        name="bracelet_to_camera_link",
         output="both",
         arguments=[
-            "0.025","0.000","0.065", "0.0","1.5708","3.1416",
+            "0", "-0.05", "-0.07", "0", "0", "0",
             "bracelet_link", LaunchConfiguration("camera_link_frame_id"),
+        ],
+    )
+
+    camera_to_color_frame = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_to_color_frame",
+        output="both",
+        arguments=[
+            "0", "0", "0", "0", "0", "0",
+            LaunchConfiguration("camera_link_frame_id"), LaunchConfiguration("color_frame_id"),
+        ],
+    )
+
+    camera_to_depth_frame = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_to_depth_frame",
+        output="both",
+        arguments=[
+            "-0.0195", "-0.005", "0", "0", "0", "0",
+            LaunchConfiguration("camera_link_frame_id"), LaunchConfiguration("depth_frame_id"),
+        ],
+    )
+
+    color_to_color_optical = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="color_to_color_optical",
+        output="both",
+        arguments=[
+            "0", "0", "0", "-3.1415", "0", "-3.1415",
+            LaunchConfiguration("color_frame_id"), LaunchConfiguration("color_optical_frame_id"),
+        ],
+    )
+
+    depth_to_depth_optical = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="depth_to_depth_optical",
+        output="both",
+        arguments=[
+            "0", "0", "0", "-3.1415", "0", "-3.1415",
+            LaunchConfiguration("depth_frame_id"), LaunchConfiguration("depth_optical_frame_id"),
         ],
     )
 
     return [
         depth_node,
         color_node,
-        camera_depth_tf_publisher,
-        camera_color_tf_publisher,
-        camera_mount_tf,
-        depth_image_proc,       # aligns depth→RGB
-        mask_rgb_with_depth,    # publishes /color/rgb_masked
-        masked_info_relay,      # publishes /color/rgb_masked/camera_info
+        depth_image_proc,
+        mask_rgb_with_depth,
+        masked_info_relay,
+        bracelet_to_camera_link,
+        camera_to_color_frame,
+        camera_to_depth_frame,
+        color_to_color_optical,
+        depth_to_depth_optical,
     ]
 
 def generate_launch_description():
