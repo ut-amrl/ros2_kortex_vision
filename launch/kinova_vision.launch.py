@@ -270,12 +270,26 @@ def launch_setup(context, *args, **kwargs):
         ],
         condition=IfCondition(LaunchConfiguration("launch_color")),
     )
+    
+    camera_mount_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_mount_tf",
+        output="both",
+        arguments=[
+            # x y z (meters)  roll pitch yaw (radians)  parent child
+            "0.025", "0.000", "0.065",
+            "0.0", "1.5708", "3.1416",
+            "bracelet_link", LaunchConfiguration("camera_link_frame_id"),
+        ],
+    )
 
     return [
         depth_node,
         color_node,
         camera_depth_tf_publisher,
         camera_color_tf_publisher,
+        camera_mount_tf,
         depth_image_proc,
     ]
 
