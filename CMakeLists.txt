@@ -11,6 +11,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Ament System Dependencies
+find_package(Python3 COMPONENTS Interpreter)
 find_package(ament_cmake REQUIRED)
 find_package(camera_calibration_parsers REQUIRED)
 find_package(camera_info_manager REQUIRED)
@@ -73,6 +74,11 @@ install(TARGETS ${PROJECT_NAME}_node
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  launch/mask_rgb_with_depth.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Include additional settings if needed
