@@ -74,6 +74,9 @@ install(TARGETS ${PROJECT_NAME}_node
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+  PATTERN "*.pyo" EXCLUDE
 )
 
 install(PROGRAMS
